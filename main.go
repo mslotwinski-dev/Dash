@@ -1,7 +1,7 @@
 package main
 
 import (
-	app "github.com/mslotwinski-dev/dash/src"
+	"github.com/mslotwinski-dev/dash/src/app"
 )
 
 func main() {

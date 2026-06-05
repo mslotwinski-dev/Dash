@@ -1,4 +1,4 @@
-package src
+package app
 
 import (
 	"bytes"
@@ -54,7 +54,7 @@ func (c *Cache) Set(key string, statusCode int, header http.Header, body []byte)
 	}
 }
 
-// cacheResponseWriter służy do "podglądania" i zapisywania tego, co backend wysyła do użytkownika
+// CacheResponseWriter służy do "podglądania" i zapisywania tego, co backend wysyła do użytkownika
 type cacheResponseWriter struct {
 	http.ResponseWriter
 	bodyBuf    *bytes.Buffer
