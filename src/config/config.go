@@ -7,27 +7,29 @@ import (
 	"time"
 )
 
-// Config holds runtime-configurable values for the Dash server.
 type Config struct {
-	Backends       []string
-	AutocertHosts  []string
-	CacheTTL       time.Duration
-	RateLimitRPS   int
-	RateLimitBurst int
-	HTTPPort       string
-	HTTPSPort      string
+	Backends        []string
+	AutocertHosts   []string
+	CacheTTL        time.Duration
+	RateLimitRPS    int
+	RateLimitBurst  int
+	HTTPPort        string
+	HTTPSPort       string
+	RedirectToHTTPS bool
+	LocalHTTPS      bool
 }
 
-// LoadConfig loads configuration from environment variables with sensible defaults.
 func LoadConfig() *Config {
 	cfg := &Config{
-		Backends:       []string{"http://localhost:3000", "http://localhost:3001"},
-		AutocertHosts:  []string{"twoja-domena.pl", "www.twoja-domena.pl"},
-		CacheTTL:       10 * time.Second,
-		RateLimitRPS:   3,
-		RateLimitBurst: 5,
-		HTTPPort:       ":80",
-		HTTPSPort:      ":443",
+		Backends:        []string{"http://localhost:3000", "http://localhost:3001"},
+		AutocertHosts:   []string{"twoja-domena.pl", "www.twoja-domena.pl"},
+		CacheTTL:        10 * time.Second,
+		RateLimitRPS:    3,
+		RateLimitBurst:  5,
+		HTTPPort:        ":80",
+		HTTPSPort:       ":443",
+		RedirectToHTTPS: false,
+		LocalHTTPS:      false,
 	}
 
 	if v := os.Getenv("DASH_BACKENDS"); v != "" {
@@ -56,6 +58,16 @@ func LoadConfig() *Config {
 	}
 	if v := os.Getenv("DASH_HTTPS_PORT"); v != "" {
 		cfg.HTTPSPort = v
+	}
+	if v := os.Getenv("DASH_REDIRECT_TO_HTTPS"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.RedirectToHTTPS = b
+		}
+	}
+	if v := os.Getenv("DASH_LOCAL_HTTPS"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.LocalHTTPS = b
+		}
 	}
 
 	return cfg

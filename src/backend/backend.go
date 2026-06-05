@@ -1,4 +1,4 @@
-package app
+package backend
 
 import (
 	"net/http/httputil"
@@ -28,7 +28,7 @@ func (b *Backend) IsAlive() bool {
 	return alive
 }
 
-func buildBackends(targets []string) []*Backend {
+func BuildBackends(targets []string) []*Backend {
 	backends := make([]*Backend, 0, len(targets))
 
 	for _, target := range targets {

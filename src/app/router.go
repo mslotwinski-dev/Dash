@@ -1,17 +1,17 @@
 package app
 
 import (
-	"bytes"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/mslotwinski-dev/dash/src/middlewares"
+	"github.com/mslotwinski-dev/dash/src/services"
 	"github.com/mslotwinski-dev/dash/src/utils"
 )
 
-func newMainRouter(dashPath string, lb *LoadBalancer, apiCache *Cache) http.Handler {
+func newMainRouter(dashPath string, lb *middlewares.LoadBalancer, apiCache *services.Cache) http.Handler {
 	fileServer := middlewares.GzipMiddleware(http.FileServer(http.Dir(dashPath)))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +29,7 @@ func newMainRouter(dashPath string, lb *LoadBalancer, apiCache *Cache) http.Hand
 	})
 }
 
-func handleAPIRoute(w http.ResponseWriter, r *http.Request, lb *LoadBalancer, apiCache *Cache) {
+func handleAPIRoute(w http.ResponseWriter, r *http.Request, lb *middlewares.LoadBalancer, apiCache *services.Cache) {
 	cacheKey := r.Method + ":" + r.URL.Path + "?" + r.URL.RawQuery
 
 	if r.Method == http.MethodGet {
@@ -57,16 +57,12 @@ func handleAPIRoute(w http.ResponseWriter, r *http.Request, lb *LoadBalancer, ap
 	utils.Warn("[API MISS] Przekierowuję do backendu: %s%s", nextBackend.URL.String(), r.URL.Path)
 
 	if r.Method == http.MethodGet {
-		crw := &cacheResponseWriter{
-			ResponseWriter: w,
-			bodyBuf:        bytes.NewBuffer(nil),
-			statusCode:     http.StatusOK,
-		}
+		crw := services.NewCRW(w)
 
 		nextBackend.ReverseProxy.ServeHTTP(crw, r)
 
-		if crw.statusCode == http.StatusOK {
-			apiCache.Set(cacheKey, crw.statusCode, crw.Header(), crw.bodyBuf.Bytes())
+		if crw.GetStatusCode() == http.StatusOK {
+			apiCache.Set(cacheKey, crw.GetStatusCode(), crw.GetHeader(), crw.GetBodyBuf())
 			utils.Info("[CACHE SAVED] Zapisano odpowiedź dla %s w RAM-ie", r.URL.Path)
 		}
 		return

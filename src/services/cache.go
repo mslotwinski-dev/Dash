@@ -1,4 +1,4 @@
-package app
+package services
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// CacheItem przechowuje zbuforowaną odpowiedź z backendu
 type CacheItem struct {
 	StatusCode int
 	Header     http.Header
@@ -15,11 +14,10 @@ type CacheItem struct {
 	ExpiresAt  time.Time
 }
 
-// Cache to bezpieczna wielowątkowo mapa w pamięci RAM
 type Cache struct {
 	sync.RWMutex
 	items map[string]CacheItem
-	ttl   time.Duration // Czas życia wpisu, np. 10 sekund
+	ttl   time.Duration
 }
 
 func NewCache(ttl time.Duration) *Cache {
@@ -36,7 +34,6 @@ func (c *Cache) Get(key string) (CacheItem, bool) {
 	if !found {
 		return CacheItem{}, false
 	}
-	// Sprawdzamy czy wpis nie wygasł
 	if time.Now().After(item.ExpiresAt) {
 		return CacheItem{}, false
 	}
@@ -54,19 +51,38 @@ func (c *Cache) Set(key string, statusCode int, header http.Header, body []byte)
 	}
 }
 
-// CacheResponseWriter służy do "podglądania" i zapisywania tego, co backend wysyła do użytkownika
-type cacheResponseWriter struct {
+type CacheResponseWriter struct {
 	http.ResponseWriter
 	bodyBuf    *bytes.Buffer
 	statusCode int
 }
 
-func (crw *cacheResponseWriter) WriteHeader(code int) {
+func (crw *CacheResponseWriter) WriteHeader(code int) {
 	crw.statusCode = code
 	crw.ResponseWriter.WriteHeader(code)
 }
 
-func (crw *cacheResponseWriter) Write(b []byte) (int, error) {
-	crw.bodyBuf.Write(b) // Zapisujemy kopię do naszego bufora w pamięci RAM
+func (crw *CacheResponseWriter) Write(b []byte) (int, error) {
+	crw.bodyBuf.Write(b)
 	return crw.ResponseWriter.Write(b)
+}
+
+func NewCRW(w http.ResponseWriter) *CacheResponseWriter {
+	return &CacheResponseWriter{
+		ResponseWriter: w,
+		bodyBuf:        bytes.NewBuffer(nil),
+		statusCode:     http.StatusOK,
+	}
+}
+
+func (crw *CacheResponseWriter) GetStatusCode() int {
+	return crw.statusCode
+}
+
+func (crw *CacheResponseWriter) GetHeader() http.Header {
+	return crw.Header()
+}
+
+func (crw *CacheResponseWriter) GetBodyBuf() []byte {
+	return crw.bodyBuf.Bytes()
 }
