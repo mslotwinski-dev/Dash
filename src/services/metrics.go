@@ -7,10 +7,33 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 
-	"github.com/mslotwinski-dev/dash/src/middlewares"
+	"github.com/mslotwinski-dev/dash/src/backend"
 	"github.com/mslotwinski-dev/dash/src/utils"
 )
+
+var (
+	currentCPU float64
+	currentRAM float64
+)
+
+func init() {
+	go func() {
+		for {
+			c, _ := cpu.Percent(0, false)
+			if len(c) > 0 {
+				currentCPU = c[0]
+			}
+			m, _ := mem.VirtualMemory()
+			if m != nil {
+				currentRAM = m.UsedPercent
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}()
+}
 
 type responseWriterDelegator struct {
 	http.ResponseWriter
@@ -55,7 +78,7 @@ func init() {
 	prometheus.MustRegister(httpRequestDuration)
 }
 
-func MetricsMiddleware(hub *WsHub, lb *middlewares.LoadBalancer) func(http.Handler) http.Handler {
+func MetricsMiddleware(hub *WsHub, getBackends func() []*backend.Backend) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -76,10 +99,13 @@ func MetricsMiddleware(hub *WsHub, lb *middlewares.LoadBalancer) func(http.Handl
 			httpRequestsTotal.WithLabelValues(r.Method, endpoint, strconv.Itoa(rw.statusCode)).Inc()
 			httpRequestDuration.WithLabelValues(r.Method, endpoint).Observe(duration)
 
-			utils.Info("[REQUEST] %s %s | Status: %d | Czas: %v", r.Method, r.URL.Path, rw.statusCode, time.Since(start))
+			elapsed := time.Since(start)
+			utils.Info("[REQUEST] %s %s | Status: %d | Czas: %v", r.Method, r.URL.Path, rw.statusCode, elapsed)
+
+			LogAccess(r.RemoteAddr, r.Method, r.URL.Path, rw.statusCode, elapsed, r.UserAgent())
 
 			var active, dead []string
-			for _, b := range lb.GetBackends() {
+			for _, b := range getBackends() {
 				if b.IsAlive() {
 					active = append(active, b.URL.String())
 				} else {
@@ -95,10 +121,12 @@ func MetricsMiddleware(hub *WsHub, lb *middlewares.LoadBalancer) func(http.Handl
 
 			go func() {
 				hub.Broadcast <- DashboardStats{
-					TotalRequests:  currentTotal, // Wykorzystane bezpośrednio z Prometheusa!
+					TotalRequests:  currentTotal,
 					ActiveBackends: active,
 					DeadBackends:   dead,
 					LastRequest:    r.Method + " " + r.URL.Path + " [" + strconv.Itoa(rw.statusCode) + "]",
+					CPUUsage:       currentCPU,
+					RAMUsage:       currentRAM,
 				}
 			}()
 		})

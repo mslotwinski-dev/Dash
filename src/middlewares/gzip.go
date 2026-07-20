@@ -2,18 +2,47 @@ package middlewares
 
 import (
 	"compress/gzip"
-	"io"
 	"net/http"
 	"strings"
 )
 
-type gzipResponseWriter struct {
-	io.Writer
+type compressResponseWriter struct {
 	http.ResponseWriter
+	gzWriter     *gzip.Writer
+	bypass       bool
+	wroteHeaders bool
 }
 
-func (w gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
+func (w *compressResponseWriter) WriteHeader(code int) {
+	if w.wroteHeaders {
+		return
+	}
+	w.wroteHeaders = true
+
+	if w.Header().Get("Content-Encoding") != "" {
+		w.bypass = true
+	} else {
+		contentType := w.Header().Get("Content-Type")
+		// Kompresujemy tylko tekstowe i JSON-owe odpowiedzi
+		if contentType == "" || strings.Contains(contentType, "text/") || strings.Contains(contentType, "application/json") || strings.Contains(contentType, "application/javascript") || strings.Contains(contentType, "image/svg+xml") {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Del("Content-Length")
+			w.Header().Add("Vary", "Accept-Encoding")
+		} else {
+			w.bypass = true
+		}
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *compressResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeaders {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.bypass {
+		return w.ResponseWriter.Write(b)
+	}
+	return w.gzWriter.Write(b)
 }
 
 func GzipMiddleware(next http.Handler) http.Handler {
@@ -23,20 +52,14 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		gzWriter := gzip.NewWriter(w)
+		defer gzWriter.Close()
 
-		gzw := gzipResponseWriter{
-			Writer:         gzWriter,
+		gzw := &compressResponseWriter{
 			ResponseWriter: w,
+			gzWriter:       gzWriter,
 		}
 
-		w.Header().Set("Content-Encoding", "gzip")
 		next.ServeHTTP(gzw, r)
-		gzWriter.Close()
 	})
 }

@@ -1,0 +1,25 @@
+global:
+  http_port: ":80"
+  https_port: ":443"
+  enable_https: false
+  local_https: false
+  redirect_to_https: false
+  autocert_hosts: []
+  cache_ttl: "10s"
+  rate_limit_rps: 10
+  rate_limit_burst: 20
+
+security:
+  whitelist: []
+  blacklist: []
+
+routes:
+  - id: "api-v1"
+    host: ""
+    path_prefix: "/api"
+    strategy: "least-conn"
+    backends:
+      - url: "http://localhost:3000"
+        weight: 3
+      - url: "http://localhost:3001"
+        weight: 1

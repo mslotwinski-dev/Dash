@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/mslotwinski-dev/dash/src/middlewares"
+	"github.com/mslotwinski-dev/dash/src/backend"
 	"github.com/mslotwinski-dev/dash/src/utils"
 )
 
@@ -16,6 +16,8 @@ type DashboardStats struct {
 	ActiveBackends []string `json:"active_backends"`
 	DeadBackends   []string `json:"dead_backends"`
 	LastRequest    string   `json:"last_request"`
+	CPUUsage       float64  `json:"cpu_usage"`
+	RAMUsage       float64  `json:"ram_usage"`
 }
 
 // Hub zarządza wszystkimi aktywnymi połączeniami WebSocket
@@ -54,7 +56,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // Zezwalamy na połączenia z każdego źródła
 }
 
-func (h *WsHub) HandleWS(w http.ResponseWriter, r *http.Request, lb *middlewares.LoadBalancer) {
+func (h *WsHub) HandleWS(w http.ResponseWriter, r *http.Request, getBackends func() []*backend.Backend) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		utils.Error("Błąd upgrade do WebSocket: %v", err)
@@ -91,6 +93,11 @@ const DashboardHTML = `
         <p>Ostatnie żądanie: <span id="last-request" style="color: #ffeb3b;">Brak</span></p>
     </div>
     <div class="card">
+        <h2>Stan serwera</h2>
+        <p>CPU: <span id="cpu-usage" style="color: #ff9800;">0%</span></p>
+        <p>RAM: <span id="ram-usage" style="color: #ff9800;">0%</span></p>
+    </div>
+    <div class="card">
         <h2>Stan infrastruktury (Backendy)</h2>
         <h3>Działające (Active):</h3>
         <ul id="active-list" class="status-up"></ul>
@@ -105,6 +112,9 @@ const DashboardHTML = `
             const stats = JSON.parse(event.data);
             document.getElementById("total-requests").innerText = stats.total_requests;
             document.getElementById("last-request").innerText = stats.last_request;
+            document.getElementById("cpu-usage").innerText = stats.cpu_usage.toFixed(2) + "%";
+            document.getElementById("ram-usage").innerText = stats.ram_usage.toFixed(2) + "%";
+            
             const activeList = document.getElementById("active-list");
             activeList.innerHTML = "";
             if(stats.active_backends) {

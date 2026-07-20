@@ -9,22 +9,22 @@ import (
 	"golang.org/x/time/rate"
 )
 
-type IPlimiter struct {
+type IPLimiter struct {
 	sync.RWMutex
 	limiters map[string]*rate.Limiter
 	r        rate.Limit
 	b        int
 }
 
-func NewIPLimiter(r rate.Limit, b int) *IPlimiter {
-	return &IPlimiter{
+func NewIPLimiter(r rate.Limit, b int) *IPLimiter {
+	return &IPLimiter{
 		limiters: make(map[string]*rate.Limiter),
 		r:        r,
 		b:        b,
 	}
 }
 
-func (i *IPlimiter) GetLimiter(ip string) *rate.Limiter {
+func (i *IPLimiter) GetLimiter(ip string) *rate.Limiter {
 	i.Lock()
 	defer i.Unlock()
 
@@ -37,7 +37,7 @@ func (i *IPlimiter) GetLimiter(ip string) *rate.Limiter {
 	return limiter
 }
 
-func RateLimitMiddleware(limiter *IPlimiter, next http.Handler) http.Handler {
+func RateLimitMiddleware(limiter *IPLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
